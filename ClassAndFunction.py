@@ -145,7 +145,6 @@ def solveSudoku(board):
     if _valid(board, i, (row, col)):
       board[row][col] = i
       if solveSudoku(board):
-        print('line 147')
         return True
       board[row][col] = 0
   return False

@@ -1,19 +1,18 @@
 import cv2
 from keras.models import load_model
 import numpy as np
-from skimage import io
 
 from ClassAndFunction import ImageRegulate
 from ClassAndFunction import extractNumbers, List2Array, solveSudoku, insertNumbers
 
 def solve(puzzle_img):
-    
+
     sudoku= ImageRegulate(puzzle_img)
     problem = cv2.resize(sudoku.warped,(324,324))
     problem = cv2.cvtColor(problem, cv2.COLOR_BGR2GRAY)
     problem = cv2.adaptiveThreshold(problem, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 8)
     
-    Num_list = extractNumbers(problem, './digit_model.h5')
+    Num_list = extractNumbers(problem,"digit_model.h5")
 
     Num_array = List2Array(Num_list)
 
