@@ -17,9 +17,9 @@ if __name__ == '__main__':
             frame = cv2.bilateralFilter(frame, 5,  50, 100)
             cv2.imshow('Input', frame)
 
-            #output = Solver.solve(frame)
-            #print('Frame ', counter, ' solved')
-            #cv2.imshow('Output window', output)
+            output = Solver.solve(frame)
+            print('Frame ', counter, ' solved')
+            cv2.imshow('Output window', output)
 
             if cv2.waitKey(1)==ord('q'):
                 break
