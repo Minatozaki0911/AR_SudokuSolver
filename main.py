@@ -22,11 +22,12 @@ if __name__ == '__main__':
 
             if cv2.waitKey(1)==ord('q'):
                 break
+    vid.release()
+    cv2.destroyAllWindows()
+
     else:
         frame = cv2.imread(capture_path)
         output = Solver.solve(frame)
         print("Solved ez clap")
         cv2.imshow('Output window', output)
 
-    vid.release()
-    cv2.destroyAllWindows()
