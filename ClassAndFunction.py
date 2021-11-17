@@ -1,13 +1,21 @@
 import cv2
 import numpy as np
+import functools
+from threading import Thread
 from scipy.spatial import distance as dist
 from keras.models import load_model
 
 class ImageRegulate:
   def __init__(self,im):
     self.src = im
-    self.contour_edges = self._contour_finder(im)
-    self.conv_M, self.warped = self._perspective_transform(im,self.contour_edges)
+    try:
+      self.contour_edges = self._contour_finder(im)
+    except Exception as e:
+      print(e)
+      self.bError = True
+      return
+    self.bError = False
+    self.conv_N, self.conv_M, self.warped = self._perspective_transform(im,self.contour_edges)
 
   def _edges_finder(self, pts):
     pts = pts.reshape(4,2)
@@ -59,10 +67,11 @@ class ImageRegulate:
     
     # compute the perspective transform matrix and then apply it
     M = cv2.getPerspectiveTransform(pts, dst)
+    N = cv2.getPerspectiveTransform(dst, pts)
     warped = cv2.warpPerspective(img, M, (maxWidth, maxHeight))
 
     # return the warped image
-    return M, warped
+    return N, M, warped
   
   def _contour_finder(self,img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -80,14 +89,15 @@ class ImageRegulate:
     puzzleCnt = None
     # loop over the contours
     for c in cnts:
-      # approximate the contour
-      peri = cv2.arcLength(c, True)
-      approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-      # if our approximated contour has four points, then we can
-      # assume we have found the outline of the puzzle
-      if len(approx) == 4:
-        puzzleCnt = approx
-        break
+      if (cv2.contourArea(c) > img.shape[0]*img.shape[1]*0.1):
+        # approximate the contour
+        peri = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.02 * peri, True)
+        # if our approximated contour has four points, then we can
+        # assume we have found the outline of the puzzle
+        if len(approx) == 4:
+          puzzleCnt = approx
+          break
     # if the puzzle contour is empty then our script could not find
   	# the outline of the Sudoku puzzle so raise an error
     if puzzleCnt is None:
@@ -96,14 +106,39 @@ class ImageRegulate:
     puzzleCnt = self._edges_finder(puzzleCnt.reshape([4,2]))
     return puzzleCnt
 
+def setTimeOut(timeout):
+    def deco(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            res = [Exception('Time out!')]
+            def newFunc():
+                try:
+                    res[0] = func(*args, **kwargs)
+                except Exception as e:
+                    res[0] = e
+            t = Thread(target=newFunc)
+            t.daemon = True
+            try:
+                t.start()
+                t.join(timeout)
+            except Exception as je:
+                print ('error starting thread')
+                raise je
+            ret = res[0]
+            if isinstance(ret, BaseException):
+                raise ret
+            return ret
+        return wrapper
+    return deco
+
 def extractNumbers(img, modelname):
   model = load_model(modelname)
-  img_resized = cv2.resize(img,(324,324))
+  #img_resized = cv2.resize(img,(324,324))
 
-  marge = 4
-  case = 36
+  marge = 7
+  case = 28 + marge*2
   taille_grille = 9 * case
-
+  img_resized = cv2.resize(img,(taille_grille,taille_grille))
   grille_txt = []
 
   for y in range(9):
@@ -122,7 +157,6 @@ def extractNumbers(img, modelname):
       else:
         ligne += "{:d}".format(0)
     grille_txt.append(ligne)
-    
   return grille_txt
 
 def List2Array(data):
@@ -135,6 +169,7 @@ def List2Array(data):
   c = np.array(b, dtype=np.uint8)
   return c
 
+@setTimeOut(2)
 def solveSudoku(board):
   find = _find_empty(board)
   if not find:
@@ -196,7 +231,7 @@ def insertNumbers(im,sudoku_problem,sudoku_ans):
         im_ans = cv2.putText(wrapped_sudoku, ans, 
                              (text_x, text_y), 
                              FONT, FONT_SCALE, FONT_COLOR, FONT_THICCNESS, cv2.LINE_AA)
-
       else:
         pass
   return im_ans
+    
