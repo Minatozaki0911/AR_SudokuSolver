@@ -1,28 +1,84 @@
 import cv2
-from keras.models import load_model
 import numpy as np
-from skimage import io 
+from multiprocessing import Process, Queue
+
+from ClassAndFunction import ImageRegulate
 from Solver import solve
 
-#cv2.imshow("haiha",solve(io.imread('Ultimate-Sudoku-Collection-tri-tue.jpg')))
-#cv2.imwrite(filename='image.jpg', img=solve(io.imread('HHA_5281.jpg')))
+def Solver(qIn1,qOut1):
+    bSkip = False
+    puzzle_ans = [None]
+    Lastpuzzle_ans = [None]
+    while(True):
+        puzzle = qIn1.get()
+        
+        if puzzle is None:
+            qOut1.put(None)
+        else:
+            puzzle_ans, bSkip , Lastpuzzle_ans= solve(puzzle, bSkip, Lastpuzzle_ans) 
+            qOut1.put(puzzle_ans)
+            
 
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-cap.set(3, 640)    # HD Camera
-cap.set(4, 480)
-Lastproblem_ans_im= [None]
-bSkip = False
-while(True):
-    ret, frame = cap.read() # Read the frame
-    if ret == True:
-        sudoku_frame, bSkip, Lastproblem_ans_im = solve(frame, bSkip, Lastproblem_ans_im) 
-        #frame = overlay(frame, sudoku_frame)
-        #showImage(sudoku_frame, "Real Time Sudoku Solver", 1066, 600) # Print the 'solved' image
-        cv2.imshow("Sudoku Solver", sudoku_frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):   # Hit q if you want to stop the camera
+if __name__ == "__main__":
+    cap = cv2.VideoCapture(0)
+    cap.set(3, 1920)    # HD Camera
+    cap.set(4, 1280)
+    cap.set(5,32)
+
+    queue1 = Queue()
+    queue2 = Queue()
+
+    p1 = Process(target=Solver, args=(queue1,queue2,))
+    p1.start()
+ 
+    ans = None
+    
+    while(True):
+        ret, frame = cap.read() # Read the frame
+        frame = frame.astype(np.uint8)
+
+        if ret == True:
+            sudoku= ImageRegulate(frame)
+            if sudoku.bError != True:
+                queue1.put(frame)
+
+                if p1.is_alive():
+                     pass
+                else:
+                    ans = None
+                    p1 = Process(target=Solver, args=(queue1,queue2,))
+                    p1.start()  
+            else:
+                p1.terminate()
+                queue2.close()
+                queue2 = Queue()
+
+            try:
+                ans = queue2.get(timeout=0.03)
+            except Exception as e:
+                pass
+
+            if (ans is not None) & (sudoku.bError != True):
+                N = sudoku.conv_N
+                problem = sudoku.warped
+                problem = cv2.cvtColor(problem, cv2.COLOR_BGR2GRAY)
+                problem = cv2.adaptiveThreshold(problem, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 8)
+
+                problem_ans_im = cv2.resize(ans,(sudoku.warped.shape[1], sudoku.warped.shape[0]))
+                unwrapped = cv2.warpPerspective(problem_ans_im, N, (sudoku.src.shape[1], sudoku.src.shape[0]))
+                output = sudoku.src + unwrapped
+                output = cv2.resize(output,(480,320))
+                cv2.imshow("Sudoku Solver", output)
+            else:
+                output = cv2.resize(frame,(480,320))
+                cv2.imshow("Sudoku Solver", output)
+
+            if cv2.waitKey(1) & 0xFF == ord('q'):   # Hit q if you want to stop the camera
+                break
+        else:
             break
-    else:
-        break
-
-cap.release()
-cv2.destroyAllWindows()
+    p1.terminate()
+    p1.close()        
+    cap.release()
+    cv2.destroyAllWindows()
+   
