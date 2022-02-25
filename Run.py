@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 from multiprocessing import Process, Queue
-
 from ClassAndFunction import ImageRegulate
 from Solver import solve
 
@@ -11,17 +10,16 @@ def Solver(qIn1,qOut1):
     Lastpuzzle_ans = [None]
     while(True):
         puzzle = qIn1.get()
-        
         if puzzle is None:
+            
             qOut1.put(None)
         else:
             puzzle_ans, bSkip , Lastpuzzle_ans= solve(puzzle, bSkip, Lastpuzzle_ans) 
             qOut1.put(puzzle_ans)
             
-
 if __name__ == "__main__":
-    cap = cv2.VideoCapture(0)
-    cap.set(3, 1920)    # HD Camera
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cap.set(3, 1920)   
     cap.set(4, 1280)
     cap.set(5,32)
 
@@ -39,46 +37,46 @@ if __name__ == "__main__":
 
         if ret == True:
             sudoku= ImageRegulate(frame)
+
             if sudoku.bError != True:
-                queue1.put(frame)
+                if (queue1.empty()):
+                    queue1.put(frame)
 
                 if p1.is_alive():
                      pass
                 else:
-                    ans = None
                     p1 = Process(target=Solver, args=(queue1,queue2,))
                     p1.start()  
             else:
                 p1.terminate()
+                p1.join()
+                ans = None
+                queue1.close()
+                queue1 = Queue()
                 queue2.close()
                 queue2 = Queue()
-
             try:
                 ans = queue2.get(timeout=0.03)
-            except Exception as e:
+            except:
                 pass
 
             if (ans is not None) & (sudoku.bError != True):
                 N = sudoku.conv_N
-                problem = sudoku.warped
-                problem = cv2.cvtColor(problem, cv2.COLOR_BGR2GRAY)
-                problem = cv2.adaptiveThreshold(problem, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 8)
-
                 problem_ans_im = cv2.resize(ans,(sudoku.warped.shape[1], sudoku.warped.shape[0]))
                 unwrapped = cv2.warpPerspective(problem_ans_im, N, (sudoku.src.shape[1], sudoku.src.shape[0]))
                 output = sudoku.src + unwrapped
-                output = cv2.resize(output,(480,320))
+                output = cv2.resize(output,(640,480))
                 cv2.imshow("Sudoku Solver", output)
             else:
-                output = cv2.resize(frame,(480,320))
+                output = cv2.resize(frame,(640,480))
                 cv2.imshow("Sudoku Solver", output)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):   # Hit q if you want to stop the camera
+            if cv2.waitKey(1) & 0xFF == ord('q'):   # Hit q if you want to stop the camera (only if you have stop trying to solve the puzzle)
                 break
         else:
             break
+
     p1.terminate()
-    p1.close()        
+    p1.join()
+    p1.close()
     cap.release()
     cv2.destroyAllWindows()
-   
